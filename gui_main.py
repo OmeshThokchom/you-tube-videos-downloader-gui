@@ -11,6 +11,9 @@ from PyQt6.QtGui import QPixmap, QFont, QIcon, QColor, QPainter, QPainterPath
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 import qdarktheme
 from youtube_api import YouTubeManager
+from downloads import DownloadsView
+import static_ffmpeg
+static_ffmpeg.add_paths()
 
 # --- Styles ---
 # --- Styles ---
@@ -249,11 +252,12 @@ class StreamUrlWorker(QRunnable):
 class VideoCard(QFrame):
     playClicked = pyqtSignal(str) 
     seekRequested = pyqtSignal(str, int) 
-    downloadClicked = pyqtSignal(str) # New signal
+    downloadClicked = pyqtSignal(str, str) # id, title
 
     def __init__(self, video_data):
         super().__init__()
         self.video_id = video_data['id']
+        self.title = video_data['title']
         self.published_at = video_data['published_at'] 
         self.setStyleSheet(CARD_STYLE)
         self.setFixedHeight(100) # Slightly taller
@@ -393,7 +397,7 @@ class VideoCard(QFrame):
         self.playClicked.emit(self.video_id)
 
     def on_download_click(self):
-        self.downloadClicked.emit(self.video_id)
+        self.downloadClicked.emit(self.video_id, self.title)
 
     def set_playing_state(self, playing):
         self.is_playing = playing
@@ -436,9 +440,12 @@ class VideoCard(QFrame):
 # --- Views ---
 
 class HomeView(QWidget):
+    requestDownload = pyqtSignal(str, str) # id, title
+
     def __init__(self):
         super().__init__()
         self.threadpool = QThreadPool()
+        # ... (rest of init) ...
         self.current_channel = None
         self.video_widgets = [] 
         self.video_map = {} 
@@ -554,6 +561,7 @@ class HomeView(QWidget):
             card = VideoCard(video)
             card.playClicked.connect(self.handle_play_click)
             card.seekRequested.connect(self.handle_seek)
+            card.downloadClicked.connect(self.requestDownload.emit)
             self.list_layout.addWidget(card)
             self.video_widgets.append(card)
             self.video_map[video['id']] = card
@@ -651,19 +659,7 @@ class HomeView(QWidget):
                 self.video_map[self.current_video_id].set_playing_state(False)
                 self.video_map[self.current_video_id].slider.setValue(0)
 
-class DownloadsView(QWidget):
-    def __init__(self):
-        super().__init__()
-        layout = QVBoxLayout(self)
-        
-        label = QLabel("Downloads")
-        label.setStyleSheet("font-size: 24px; font-weight: bold; color: #fff;")
-        layout.addWidget(label)
-        
-        tabs = QTabWidget()
-        tabs.addTab(QLabel("Active Downloads List (Coming Soon)"), "Active")
-        tabs.addTab(QLabel("Completed Downloads List (Coming Soon)"), "Completed")
-        layout.addWidget(tabs)
+# Removed DownloadsView (Imported from downloads.py)
 
 class SettingsView(QWidget):
     def __init__(self):
@@ -760,6 +756,10 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.home_view)
         self.stack.addWidget(self.downloads_view)
         self.stack.addWidget(self.settings_view)
+
+        # Connect Download Signal
+        self.home_view.requestDownload.connect(self.downloads_view.add_download)
+        self.home_view.requestDownload.connect(lambda: self.switch_view(1)) # Auto switch to downloads
 
         # Connect Navigation
         self.sidebar.btn_home.clicked.connect(lambda: self.switch_view(0))
