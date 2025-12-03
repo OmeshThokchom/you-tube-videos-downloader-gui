@@ -480,28 +480,40 @@ class HomeView(QWidget):
         # Sort Dropdown
         self.sort_combo = QComboBox()
         self.sort_combo.addItems(["Newest to Oldest", "Oldest to Newest"])
+        self.sort_combo.currentIndexChanged.connect(self.sort_videos)
+        self.sort_combo.setFixedWidth(150)
         self.sort_combo.setStyleSheet("""
             QComboBox {
-                padding: 10px;
-                border-radius: 20px;
+                padding: 8px;
                 border: 1px solid #333;
-                background-color: #252525;
+                border-radius: 6px;
+                background-color: #252526;
                 color: #fff;
-                min-width: 150px;
             }
             QComboBox::drop-down {
                 border: none;
             }
-            QComboBox::down-arrow {
-                image: url(none);
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #888;
-                margin-right: 10px;
+        """)
+        header_layout.addWidget(self.sort_combo)
+
+        # Download Selected Button
+        self.download_selected_btn = QPushButton("Download Selected")
+        self.download_selected_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.download_selected_btn.clicked.connect(self.download_selected_videos)
+        self.download_selected_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3ea6ff;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #358cd6;
             }
         """)
-        self.sort_combo.currentIndexChanged.connect(self.sort_videos)
-        header_layout.addWidget(self.sort_combo)
+        header_layout.addWidget(self.download_selected_btn)
 
         layout.addLayout(header_layout)
 
@@ -591,6 +603,18 @@ class HomeView(QWidget):
         # Add back
         for card in self.video_widgets:
             self.list_layout.addWidget(card)
+
+    def download_selected_videos(self):
+        count = 0
+        for card in self.video_widgets:
+            if card.checkbox.isChecked():
+                self.requestDownload.emit(card.video_id, card.title)
+                count += 1
+        
+        if count > 0:
+            QMessageBox.information(self, "Batch Download", f"Started {count} downloads.")
+        else:
+            QMessageBox.warning(self, "Batch Download", "No videos selected.")
 
     def on_fetch_error(self, error):
         self.search_btn.setEnabled(True)
