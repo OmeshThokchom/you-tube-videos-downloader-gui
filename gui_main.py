@@ -5,8 +5,8 @@ import yt_dlp
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout, 
                              QFrame, QSizePolicy, QMessageBox, QSlider, QStyle, QStackedWidget,
-                             QTabWidget, QCheckBox, QComboBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool, QObject, QSize, QUrl
+                             QTabWidget, QCheckBox, QComboBox, QFileDialog)
+from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool, QObject, QSize, QUrl, QSettings, QStandardPaths
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QColor, QPainter, QPainterPath
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 import qdarktheme
@@ -259,86 +259,121 @@ class VideoCard(QFrame):
         self.video_id = video_data['id']
         self.title = video_data['title']
         self.published_at = video_data['published_at'] 
-        self.setStyleSheet(CARD_STYLE)
-        self.setFixedHeight(100) # Slightly taller
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #252526;
+                border-radius: 12px;
+                border: 1px solid #333;
+            }
+            QFrame:hover {
+                border: 1px solid #444;
+            }
+            QLabel {
+                background: transparent;
+                border: none;
+                font-family: "Segoe UI", sans-serif;
+            }
+            QPushButton {
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #333;
+            }
+        """)
+        self.setFixedHeight(80) # More compact
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Main Layout: Horizontal
         layout = QHBoxLayout(self) 
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(15)
 
         # 1. Left: Thumbnail
         self.thumb_label = QLabel()
-        self.thumb_label.setFixedSize(76, 76) 
-        self.thumb_label.setStyleSheet("background-color: #121212; border-radius: 12px;")
+        self.thumb_label.setFixedSize(60, 60) 
+        self.thumb_label.setStyleSheet("background-color: #121212; border-radius: 8px;")
         self.thumb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb_label.setText("")
         layout.addWidget(self.thumb_label)
 
         # 2. Center: Info & Controls
         center_layout = QVBoxLayout()
-        center_layout.setSpacing(6)
-        center_layout.setContentsMargins(0, 4, 0, 4)
+        center_layout.setSpacing(4)
+        center_layout.setContentsMargins(0, 2, 0, 2)
         
         # Title
         self.title_label = QLabel(video_data['title'])
         self.title_label.setObjectName("titleLabel")
         self.title_label.setWordWrap(False) 
-        self.title_label.setStyleSheet("background: transparent;")
+        self.title_label.setStyleSheet("color: #fff; font-weight: bold; font-size: 14px;")
         center_layout.addWidget(self.title_label)
+
+        # Bottom Row: Date | Slider | Time | Controls
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(10)
 
         # Date Label
         date_str = video_data['published_at'].split('T')[0]
-        self.date_label = QLabel(f"Uploaded: {date_str}")
-        self.date_label.setObjectName("dateLabel")
-        self.date_label.setStyleSheet("color: #888; font-size: 11px; background: transparent;")
-        center_layout.addWidget(self.date_label)
-
-        # Slider Row
-        slider_layout = QHBoxLayout()
-        slider_layout.setSpacing(8)
+        self.date_label = QLabel(date_str)
+        self.date_label.setStyleSheet("color: #888; font-size: 12px;")
+        bottom_row.addWidget(self.date_label)
         
+        # Slider
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 0)
-        self.slider.setFixedHeight(20)
+        self.slider.setFixedHeight(16)
+        self.slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: none;
+                height: 4px;
+                background: #333;
+                border-radius: 2px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #3ea6ff;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #3ea6ff;
+                border: none;
+                width: 10px;
+                height: 10px;
+                margin: -3px 0;
+                border-radius: 5px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #fff;
+            }
+        """)
         self.slider.sliderMoved.connect(self.on_slider_move)
         self.slider.sliderPressed.connect(self.on_slider_press)
         self.slider.sliderReleased.connect(self.on_slider_release)
-        slider_layout.addWidget(self.slider)
-
-        center_layout.addLayout(slider_layout)
-
-        # Controls Row (Play, Download, Time)
-        controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(10)
-        
-        # Play Button
-        self.play_btn = QPushButton()
-        self.play_btn.setObjectName("controlBtn")
-        self.play_btn.setFixedSize(32, 32)
-        self.play_btn.setIcon(QIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)))
-        self.play_btn.setIconSize(QSize(16, 16))
-        self.play_btn.clicked.connect(self.on_play_click)
-        controls_layout.addWidget(self.play_btn)
-
-        # Download Button
-        self.download_btn = QPushButton()
-        self.download_btn.setObjectName("controlBtn")
-        self.download_btn.setFixedSize(32, 32)
-        self.download_btn.setIcon(QIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown))) 
-        self.download_btn.setIconSize(QSize(16, 16))
-        self.download_btn.clicked.connect(self.on_download_click)
-        controls_layout.addWidget(self.download_btn)
+        bottom_row.addWidget(self.slider)
 
         # Time Labels
         self.time_label = QLabel("0:00 / 0:00")
-        self.time_label.setStyleSheet("color: #666; font-size: 11px; background: transparent;")
-        controls_layout.addWidget(self.time_label)
-        
-        controls_layout.addStretch()
-        center_layout.addLayout(controls_layout)
-        
+        self.time_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        bottom_row.addWidget(self.time_label)
+
+        # Play Button
+        self.play_btn = QPushButton()
+        self.play_btn.setFixedSize(28, 28)
+        self.play_btn.setIcon(QIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)))
+        self.play_btn.setIconSize(QSize(14, 14))
+        self.play_btn.clicked.connect(self.on_play_click)
+        bottom_row.addWidget(self.play_btn)
+
+        # Download Button
+        self.download_btn = QPushButton()
+        self.download_btn.setFixedSize(28, 28)
+        self.download_btn.setIcon(QIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown))) 
+        self.download_btn.setIconSize(QSize(14, 14))
+        self.download_btn.clicked.connect(self.on_download_click)
+        bottom_row.addWidget(self.download_btn)
+
+        center_layout.addLayout(bottom_row)
         layout.addLayout(center_layout)
 
         # 3. Right: Checkbox
@@ -373,8 +408,8 @@ class VideoCard(QFrame):
         pixmap = QPixmap()
         pixmap.loadFromData(data)
         
-        # Crop to square 76x76
-        size = 76
+        # Crop to square 60x60
+        size = 60
         scaled = pixmap.scaled(QSize(size, size), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
         x = (scaled.width() - size) // 2
         y = (scaled.height() - size) // 2
@@ -386,7 +421,7 @@ class VideoCard(QFrame):
         painter = QPainter(rounded)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(0, 0, size, size, 12, 12)
+        path.addRoundedRect(0, 0, size, size, 8, 8)
         painter.setClipPath(path)
         painter.drawPixmap(0, 0, cropped)
         painter.end()
@@ -404,9 +439,32 @@ class VideoCard(QFrame):
         icon = QStyle.StandardPixmap.SP_MediaPause if playing else QStyle.StandardPixmap.SP_MediaPlay
         self.play_btn.setIcon(QIcon(QApplication.style().standardIcon(icon)))
         if playing:
-            self.setStyleSheet(CARD_STYLE + "QFrame { border: 1px solid #3ea6ff; background-color: #252525; }")
+            self.setStyleSheet(self.styleSheet() + "QFrame { border: 1px solid #3ea6ff; background-color: #2a2a2a; }")
         else:
-            self.setStyleSheet(CARD_STYLE)
+            # Reset to default style (re-apply the init stylesheet)
+            self.setStyleSheet("""
+                QFrame {
+                    background-color: #252526;
+                    border-radius: 12px;
+                    border: 1px solid #333;
+                }
+                QFrame:hover {
+                    border: 1px solid #444;
+                }
+                QLabel {
+                    background: transparent;
+                    border: none;
+                    font-family: "Segoe UI", sans-serif;
+                }
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #333;
+                }
+            """)
 
     def format_time(self, ms):
         seconds = (ms // 1000) % 60
@@ -688,33 +746,118 @@ class HomeView(QWidget):
 class SettingsView(QWidget):
     def __init__(self):
         super().__init__()
+        self.settings = QSettings("YouTubeFetcher", "Config")
+        
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.setContentsMargins(40, 40, 40, 40)
         
         label = QLabel("Settings")
-        label.setStyleSheet("font-size: 24px; font-weight: bold; color: #fff;")
+        label.setStyleSheet("font-size: 24px; font-weight: bold; color: #fff; margin-bottom: 20px;")
         layout.addWidget(label)
         
-        # Placeholder settings
         form_layout = QVBoxLayout()
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(15)
         
-        form_layout.addWidget(QLabel("Download Path:"))
-        path_input = QLineEdit()
-        path_input.setPlaceholderText("C:/Users/Downloads")
-        form_layout.addWidget(path_input)
+        # Download Path
+        path_label = QLabel("Download Path:")
+        path_label.setStyleSheet("color: #aaa; font-size: 14px;")
+        form_layout.addWidget(path_label)
         
-        form_layout.addWidget(QLabel("API Key:"))
-        api_input = QLineEdit()
-        api_input.setPlaceholderText("Enter YouTube API Key")
-        form_layout.addWidget(api_input)
+        path_row = QHBoxLayout()
+        self.path_input = QLineEdit()
+        self.path_input.setReadOnly(True)
+        self.path_input.setStyleSheet("""
+            QLineEdit {
+                padding: 10px;
+                background-color: #252526;
+                border: 1px solid #333;
+                border-radius: 5px;
+                color: #fff;
+            }
+        """)
+        path_row.addWidget(self.path_input)
         
+        browse_btn = QPushButton("Browse")
+        browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        browse_btn.clicked.connect(self.browse_path)
+        browse_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #333;
+                color: white;
+                border: none;
+                padding: 10px 15px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #444;
+            }
+        """)
+        path_row.addWidget(browse_btn)
+        form_layout.addLayout(path_row)
+        
+        # API Key (Optional placeholder for now)
+        api_label = QLabel("API Key (Restart Required):")
+        api_label.setStyleSheet("color: #aaa; font-size: 14px; margin-top: 10px;")
+        form_layout.addWidget(api_label)
+        
+        self.api_input = QLineEdit()
+        self.api_input.setPlaceholderText("Enter YouTube API Key")
+        self.api_input.setStyleSheet("""
+            QLineEdit {
+                padding: 10px;
+                background-color: #252526;
+                border: 1px solid #333;
+                border-radius: 5px;
+                color: #fff;
+            }
+        """)
+        form_layout.addWidget(self.api_input)
+        
+        # Save Button
         save_btn = QPushButton("Save Settings")
-        save_btn.setProperty("class", "action-btn")
-        save_btn.setFixedWidth(150)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.clicked.connect(self.save_settings)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3ea6ff;
+                color: white;
+                border: none;
+                padding: 12px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 14px;
+                margin-top: 20px;
+            }
+            QPushButton:hover {
+                background-color: #358cd6;
+            }
+        """)
         form_layout.addWidget(save_btn)
         
         layout.addLayout(form_layout)
+        
+        self.load_settings()
+
+    def browse_path(self):
+        path = QFileDialog.getExistingDirectory(self, "Select Download Folder")
+        if path:
+            self.path_input.setText(path)
+
+    def load_settings(self):
+        # Default path
+        default_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+        saved_path = self.settings.value("download_path", default_path)
+        self.path_input.setText(saved_path)
+        
+        # API Key
+        api_key = self.settings.value("api_key", "")
+        self.api_input.setText(api_key)
+
+    def save_settings(self):
+        self.settings.setValue("download_path", self.path_input.text())
+        self.settings.setValue("api_key", self.api_input.text())
+        QMessageBox.information(self, "Settings", "Settings saved successfully!")
 
 class Sidebar(QWidget):
     def __init__(self, parent=None):

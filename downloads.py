@@ -3,7 +3,7 @@ import re
 import yt_dlp
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, 
                              QScrollArea, QFrame, QPushButton, QMessageBox, QTabWidget)
-from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool, QObject
+from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool, QObject, QSettings, QStandardPaths
 
 # --- Worker Signals ---
 class DownloadSignals(QObject):
@@ -241,12 +241,17 @@ class DownloadsView(QWidget):
         self.tabs.addTab(completed_scroll, "Completed")
 
     def add_download(self, video_id, title):
+        # Get Path from Settings
+        settings = QSettings("YouTubeFetcher", "Config")
+        default_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+        download_path = settings.value("download_path", default_path)
+
         # Create Widget
         item = DownloadItemWidget(title)
         self.active_layout.insertWidget(0, item) # Add to top
         
         # Create Worker
-        worker = DownloadWorker(video_id, title)
+        worker = DownloadWorker(video_id, title, download_path)
         worker.signals.progress.connect(item.update_progress)
         worker.signals.finished.connect(lambda: self.on_download_finished(item))
         worker.signals.error.connect(item.set_error)
