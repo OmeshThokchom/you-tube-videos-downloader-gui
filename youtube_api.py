@@ -17,7 +17,7 @@ class YouTubeManager:
 
     def get_channel_videos(self, channel_id_or_handle):
         """
-        Fetches all videos from a channel's 'uploads' playlist.
+        Fetches ALL videos from a channel's 'uploads' playlist.
         Returns a list of dictionaries with video details.
         """
         if not self.youtube:
@@ -28,7 +28,7 @@ class YouTubeManager:
             import re
             channel_input = channel_id_or_handle.strip()
             
-            # Regex to extract handle from URL (e.g. https://youtube.com/@Handle)
+            # Regex to extract handle from URL
             handle_match = re.search(r'(?:https?://)?(?:www\.)?youtube\.com/(?:@)([a-zA-Z0-9_.-]+)', channel_input)
             if handle_match:
                 channel_input = '@' + handle_match.group(1)
@@ -67,7 +67,7 @@ class YouTubeManager:
             uploads_playlist_id = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
             channel_title = response['items'][0]['snippet']['title']
 
-            # 2. Fetch Playlist Items
+            # 4. Fetch All Playlist Items
             videos = []
             next_page_token = None
             
@@ -75,7 +75,7 @@ class YouTubeManager:
                 pl_request = self.youtube.playlistItems().list(
                     part="snippet,contentDetails",
                     playlistId=uploads_playlist_id,
-                    maxResults=50,
+                    maxResults=50, # Max allowed by API
                     pageToken=next_page_token
                 )
                 pl_response = pl_request.execute()
@@ -99,6 +99,9 @@ class YouTubeManager:
                     break
             
             return videos
+
+        except Exception as e:
+            raise e
 
         except Exception as e:
             raise e
