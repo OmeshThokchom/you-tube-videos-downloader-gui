@@ -5,7 +5,7 @@ import yt_dlp
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout, 
                              QFrame, QSizePolicy, QMessageBox, QSlider, QStyle, QStackedWidget,
-                             QTabWidget, QCheckBox)
+                             QTabWidget, QCheckBox, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QRunnable, QThreadPool, QObject, QSize, QUrl
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QColor, QPainter, QPainterPath
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -254,6 +254,7 @@ class VideoCard(QFrame):
     def __init__(self, video_data):
         super().__init__()
         self.video_id = video_data['id']
+        self.published_at = video_data['published_at'] 
         self.setStyleSheet(CARD_STYLE)
         self.setFixedHeight(100) # Slightly taller
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -279,9 +280,16 @@ class VideoCard(QFrame):
         # Title
         self.title_label = QLabel(video_data['title'])
         self.title_label.setObjectName("titleLabel")
-        self.title_label.setWordWrap(False) # Single line preferred for playlist look
+        self.title_label.setWordWrap(False) 
         self.title_label.setStyleSheet("background: transparent;")
         center_layout.addWidget(self.title_label)
+
+        # Date Label
+        date_str = video_data['published_at'].split('T')[0]
+        self.date_label = QLabel(f"Uploaded: {date_str}")
+        self.date_label.setObjectName("dateLabel")
+        self.date_label.setStyleSheet("color: #888; font-size: 11px; background: transparent;")
+        center_layout.addWidget(self.date_label)
 
         # Slider Row
         slider_layout = QHBoxLayout()
@@ -461,6 +469,33 @@ class HomeView(QWidget):
         self.search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.search_btn.clicked.connect(self.start_new_search)
         header_layout.addWidget(self.search_btn)
+        
+        # Sort Dropdown
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Newest to Oldest", "Oldest to Newest"])
+        self.sort_combo.setStyleSheet("""
+            QComboBox {
+                padding: 10px;
+                border-radius: 20px;
+                border: 1px solid #333;
+                background-color: #252525;
+                color: #fff;
+                min-width: 150px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: url(none);
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #888;
+                margin-right: 10px;
+            }
+        """)
+        self.sort_combo.currentIndexChanged.connect(self.sort_videos)
+        header_layout.addWidget(self.sort_combo)
+
         layout.addLayout(header_layout)
 
         # Scroll Area
@@ -529,6 +564,25 @@ class HomeView(QWidget):
                 self.threadpool.start(worker)
 
         self.status_label.setText(f"Found {len(self.video_widgets)} videos.")
+        self.sort_videos() 
+
+    def sort_videos(self):
+        if not self.video_widgets:
+            return
+            
+        sort_mode = self.sort_combo.currentIndex() # 0 = Newest, 1 = Oldest
+        
+        # Remove all from layout
+        for card in self.video_widgets:
+            self.list_layout.removeWidget(card)
+            
+        # Sort
+        reverse = (sort_mode == 0) 
+        self.video_widgets.sort(key=lambda x: x.published_at, reverse=reverse)
+        
+        # Add back
+        for card in self.video_widgets:
+            self.list_layout.addWidget(card)
 
     def on_fetch_error(self, error):
         self.search_btn.setEnabled(True)
