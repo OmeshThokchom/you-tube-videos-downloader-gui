@@ -3,3 +3,4 @@ python-dotenv
 PyQt6
 pyqtdarktheme
 isodate
+yt-dlp
